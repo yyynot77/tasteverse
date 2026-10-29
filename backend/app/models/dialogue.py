@@ -70,6 +70,7 @@ class DialogueRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     state: GameState
+    state_token: str = Field(min_length=1, max_length=200)
     message: DialogueText
     conversation: list[DialogueTurn] = Field(
         default_factory=list,
@@ -147,6 +148,7 @@ class DialogueResponse(BaseModel):
     tool_calls_executed: int = Field(default=0, ge=0, le=3)
     transition: DialogueTransition
     state: GameState
+    state_token: str = Field(min_length=1, max_length=200)
     conversation: list[DialogueTurn] = Field(
         default_factory=list,
         max_length=MAX_CONVERSATION_TURNS + 2,

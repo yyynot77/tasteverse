@@ -225,6 +225,9 @@ class GameState(BaseModel):
 
     # Server-computed data.
     session_id: UUID = Field(default_factory=uuid4)
+    # Incremented by every applied transition. The signed state envelope binds
+    # this value so a client cannot splice a token onto an older/newer state.
+    state_version: int = Field(default=0, ge=0)
     stage: GameStage = "explore"
     relationships: NpcRelationships = Field(default_factory=NpcRelationships)
     clues: list[Clue] = Field(default_factory=list)
@@ -259,8 +262,14 @@ class GameState(BaseModel):
 
 
 class StartGameResponse(BaseModel):
-    """Response body for ``POST /api/game/start``."""
+    """Response body for ``POST /api/game/start``.
+
+    ``state_token`` is the server signature the client must send back with the
+    state on every mutating route. It is not a secret, but changing any state
+    field without the server key invalidates it.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
     state: GameState
+    state_token: str = Field(min_length=1, max_length=200)

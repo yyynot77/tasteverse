@@ -138,7 +138,9 @@ docs/                             Product and task documentation
 | `GET` | `/health` | `{"status":"ok"}` |
 | `GET` | `/api/npcs` | Array of the three fixed NPC profiles |
 | `GET` | `/api/npcs/{npc_id}` | One NPC profile, or a `404` error envelope |
-| `POST` | `/api/game/start` | `{"state": GameState}` for a fresh session |
+| `POST` | `/api/game/start` | `{"state": GameState, "state_token": string}` |
+| `POST` | `/api/npc/{npc_id}/dialogue` | Reply, real Qloo evidence, rules transition, `state`, `state_token` |
+| `POST` | `/api/plan/evaluate` | Evidence, component/NPC reasons, reactions, score, ending, `state`, `state_token` |
 
 `POST /api/game/start` accepts only player-supplied interests:
 
@@ -157,6 +159,45 @@ be non-empty. Each list holds up to 5 items, each item is trimmed and limited to
 80 characters, and unknown fields are rejected. The returned `GameState` starts
 at stage `explore` with identical NPC relationship values, empty clues, and
 `null` plan, score, and ending. Starting a game performs no Qloo or LLM call.
+
+### Signed state
+
+Every returned `state` is paired with a `state_token`. Mutating routes require
+both `state` and `state_token` from the previous response. The token is an
+HMAC-SHA256 signature over the full state, session ID, and monotonic
+`state_version`; changing a relationship, stage, clue, score, ending, or any
+other field invalidates it. Forged state is rejected with `409` and
+`state_integrity_error` before any provider or rules call. Persist and resend
+both values to resume; do not try to rebuild the token client-side.
+
+Set `GAME_STATE_SECRET` to a stable random value of at least 32 characters in
+deployment. Local development without it uses a fixed non-production fallback
+so a saved game survives an API restart. A production environment (`APP_ENV` or
+`ENVIRONMENT=production`) refuses to start with a missing/short secret.
+
+### Plan evaluation
+
+```json
+{
+  "state": { "...": "previous GameState" },
+  "state_token": "v1...",
+  "plan": {
+    "movie": "Inception",
+    "music": "jazz",
+    "food": "ramen",
+    "free_text": "optional player description"
+  }
+}
+```
+
+At least one selection or non-empty `free_text` is required. When free text is
+needed to fill blank fields, DeepSeek returns advisory movie/music/food labels.
+That output is strictly validated; it cannot set a score, ending, or any state
+field. Qloo search/insights/tags supply actual entity or tag IDs, linked
+deterministically to plan components and NPCs. The Task 06 rules engine alone
+computes score and ending. Empty evidence is a valid conservative outcome with
+`evidence_status: "unavailable"`; provider failures never substitute invented
+entities, and a free-text-only interpretation failure returns a retryable `503`.
 
 Invalid requests and unknown NPCs use one error envelope:
 

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
+from app.api.errors import ApiError
+from app.core.state_security import StateConfigurationError, sign_state
 from app.models.game import (
     GameState,
     NpcRelationships,
@@ -32,4 +34,13 @@ def start_game(request: StartGameRequest) -> StartGameResponse:
         score=None,
         ending=None,
     )
-    return StartGameResponse(state=state)
+    try:
+        token = sign_state(state)
+    except StateConfigurationError as exc:
+        raise ApiError(
+            status_code=503,
+            code=exc.code,
+            message=str(exc),
+            retryable=False,
+        ) from None
+    return StartGameResponse(state=state, state_token=token)

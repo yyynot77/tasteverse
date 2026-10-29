@@ -271,6 +271,12 @@ def _append_event(state: GameState, event_id: str) -> None:
         state.applied_event_ids.append(event_id)
 
 
+def _bump_state_version(state: GameState) -> None:
+    """Record that a real transition occurred for signed-envelope freshness."""
+
+    state.state_version += 1
+
+
 def _advance_to_plan_when_ready(state: GameState) -> None:
     if state.stage == "explore" and set(NPC_IDS).issubset(state.interacted_npcs):
         state.stage = "plan"
@@ -471,6 +477,7 @@ def record_npc_interaction(
         before + INTERACTION_RELATIONSHIP_GAIN,
     )
     after = _get_relationship(next_state, validated_npc)
+    _bump_state_version(next_state)
     _advance_to_plan_when_ready(next_state)
     reasons.append(
         f"Recorded interaction with {validated_npc}; relationship "
@@ -576,6 +583,7 @@ def record_clue(
         gain += INTERACTION_RELATIONSHIP_GAIN
     _set_relationship(next_state, validated_npc, before + gain)
     after = _get_relationship(next_state, validated_npc)
+    _bump_state_version(next_state)
     _advance_to_plan_when_ready(next_state)
 
     reasons.append(
@@ -642,6 +650,7 @@ def update_relationship(
     _append_event(next_state, event_key)
     _set_relationship(next_state, validated_npc, before + delta)
     after = _get_relationship(next_state, validated_npc)
+    _bump_state_version(next_state)
     reasons = [
         f"Applied relationship event {event_key!r} to {validated_npc}; "
         f"relationship {before} -> {after}."
@@ -896,6 +905,7 @@ def evaluate_plan(
     next_state.score = overall_score
     next_state.ending = ending
     next_state.stage = "complete"
+    _bump_state_version(next_state)
     if evidence_available:
         next_state.cultural_matches = CulturalMatches(
             movies=components[0].score / MAX_SCORE,

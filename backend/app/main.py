@@ -17,11 +17,17 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from app.api import dialogue_router, game_router, npcs_router
+from app.api import (
+    dialogue_router,
+    game_router,
+    npcs_router,
+    plan_router,
+)
 from app.api.errors import install_error_handlers
 
 if TYPE_CHECKING:
     from app.agents.service import DialogueService
+    from app.services.plan_service import PlanService
 
 DEFAULT_CORS_ORIGINS = (
     "http://localhost:5173",
@@ -79,13 +85,14 @@ def create_app(
     cors_origins: Sequence[str] | None = None,
     *,
     dialogue_service_factory: Callable[[], "DialogueService"] | None = None,
+    plan_service_factory: Callable[[], "PlanService"] | None = None,
 ) -> FastAPI:
-    """Build the application, optionally injecting dialogue dependencies.
+    """Build the application, optionally injecting dialogue/plan dependencies.
 
-    ``dialogue_service_factory`` is intended for tests and explicitly supplied
-    deployments. The default lazily builds the real DeepSeek/Qloo service from
-    environment configuration on the first dialogue request, so unrelated
-    routes still start without credentials.
+    The factories are intended for tests and explicitly supplied deployments.
+    The default lazily builds the real provider-backed services from environment
+    configuration on first use, so unrelated routes still start without
+    credentials.
     """
 
     origins = (
@@ -100,6 +107,7 @@ def create_app(
         lifespan=lifespan,
     )
     application.state.dialogue_service_factory = dialogue_service_factory
+    application.state.plan_service_factory = plan_service_factory
 
     application.add_middleware(
         CORSMiddleware,
@@ -113,6 +121,7 @@ def create_app(
     application.include_router(npcs_router)
     application.include_router(game_router)
     application.include_router(dialogue_router)
+    application.include_router(plan_router)
 
     @application.get("/health", response_model=HealthResponse)
     def health() -> HealthResponse:

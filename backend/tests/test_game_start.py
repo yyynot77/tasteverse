@@ -38,7 +38,9 @@ def test_start_returns_fresh_initial_state() -> None:
 
     assert response.status_code == 200
     body = response.json()
-    assert set(body) == {"state"}
+    assert set(body) == {"state", "state_token"}
+    assert body["state_token"].startswith("v1.")
+    assert len(body["state_token"]) > 20
 
     state = body["state"]
     assert state["player_interests"] == VALID_INTERESTS
@@ -206,3 +208,15 @@ def test_start_rejects_malformed_json() -> None:
 
     _assert_error_envelope(response, 422, "invalid_request")
     assert "player_interests" not in response.json()["error"]["message"]
+
+
+def test_start_fails_closed_without_a_production_signing_secret(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.delenv("GAME_STATE_SECRET", raising=False)
+
+    with TestClient(app) as client:
+        response = client.post("/api/game/start", json=_payload())
+
+    _assert_error_envelope(response, 503, "state_configuration_error")

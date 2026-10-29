@@ -10,6 +10,12 @@ from app.agents.service import DialogueService
 from app.api.errors import ApiError
 from app.core.config import DeepSeekConfigurationError
 from app.core.rules import RulesError, record_npc_interaction
+from app.core.state_security import (
+    StateConfigurationError,
+    StateSecurityError,
+    sign_state,
+    verify_state,
+)
 from app.models.dialogue import (
     DialogueRequest,
     DialogueResponse,
@@ -17,6 +23,7 @@ from app.models.dialogue import (
     DialogueTransition,
     DialogueTurn,
 )
+from app.models.game import GameState
 from app.models.npc import NPC_BY_ID
 from app.services.qloo_service import QlooConfigurationError
 
@@ -73,6 +80,27 @@ def _agent_api_error(exc: Exception) -> ApiError:
     )
 
 
+def _verify_game_state(state: GameState, token: str) -> None:
+    """Validate the signed envelope before any provider or rules call."""
+
+    try:
+        verify_state(state, token)
+    except StateConfigurationError as exc:
+        raise ApiError(
+            status_code=503,
+            code=exc.code,
+            message=str(exc),
+            retryable=False,
+        ) from None
+    except StateSecurityError as exc:
+        raise ApiError(
+            status_code=409,
+            code=exc.code,
+            message=str(exc),
+            retryable=False,
+        ) from None
+
+
 @router.post(
     "/{npc_id}/dialogue",
     response_model=DialogueResponse,
@@ -96,6 +124,8 @@ async def talk_to_npc(
             code="npc_not_found",
             message="NPC not found.",
         )
+
+    _verify_game_state(request.state, request.state_token)
 
     if request.state.stage == "complete":
         raise ApiError(
@@ -153,6 +183,7 @@ async def talk_to_npc(
             reasons=transition.reasons,
         ),
         state=transition.state,
+        state_token=sign_state(transition.state),
         conversation=conversation,
     )
 
