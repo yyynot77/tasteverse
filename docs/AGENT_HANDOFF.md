@@ -28,4 +28,4 @@ Fresh checkout setup works, the frontend build passes, backend health works, and
 
 Commit with message `task-01: initialize TasteVerse scaffold`. Report changed files, verification output summary, known issues, and commit hash. Codex will inspect the diff and independently rerun checks before PASS.
 
-No direct DeepSeek Harness transport was found in this environment. This file is the task dispatch artifact; the operator should hand it to DeepSeek Harness.
+No direct DeepSeek Harness transport is exposed to Codex yet. This file is the task dispatch artifact until its MCP bridge is available.
