@@ -3,11 +3,11 @@
 TasteVerse is a cultural adventure game scaffold. React owns the menus and UI,
 Phaser 3 owns the town scene, and FastAPI is the backend.
 
-This repository now includes **Task 03**: a playable pixel-style town scene.
-React owns the menus and interaction panel, Phaser 3 owns movement, collision,
-and NPC proximity, and a typed event bridge connects the two. Qloo, DeepSeek,
-dialogue generation, game rules, scoring, and deployment are **not** implemented
-yet. The only application endpoint is `GET /health`.
+This repository now includes **Task 04**: typed FastAPI foundation routes for
+the fixed NPC catalog and new game sessions. React owns the menus and
+interaction panel, Phaser 3 owns movement, collision, and NPC proximity, and a
+typed event bridge connects the two. Qloo, DeepSeek, dialogue generation, plan
+evaluation, scoring, and deployment are **not** implemented yet.
 
 ## Stack
 
@@ -136,6 +136,43 @@ docs/                             Product and task documentation
 | Method | Path | Response |
 | --- | --- | --- |
 | `GET` | `/health` | `{"status":"ok"}` |
+| `GET` | `/api/npcs` | Array of the three fixed NPC profiles |
+| `GET` | `/api/npcs/{npc_id}` | One NPC profile, or a `404` error envelope |
+| `POST` | `/api/game/start` | `{"state": GameState}` for a fresh session |
+
+`POST /api/game/start` accepts only player-supplied interests:
+
+```json
+{
+  "player_interests": {
+    "movies": ["Inception"],
+    "music": ["jazz"],
+    "food": ["ramen"]
+  }
+}
+```
+
+All three interest lists are required, but at least one item across them must
+be non-empty. Each list holds up to 5 items, each item is trimmed and limited to
+80 characters, and unknown fields are rejected. The returned `GameState` starts
+at stage `explore` with identical NPC relationship values, empty clues, and
+`null` plan, score, and ending. Starting a game performs no Qloo or LLM call.
+
+Invalid requests and unknown NPCs use one error envelope:
+
+```json
+{
+  "error": {
+    "code": "invalid_request",
+    "message": "Request validation failed.",
+    "retryable": false
+  }
+}
+```
+
+CORS is enabled only for the explicit origins in `CORS_ALLOWED_ORIGINS`
+(comma-separated). It defaults to `http://localhost:5173` and
+`http://127.0.0.1:5173`; wildcard origins are rejected.
 
 ## Scope guard
 
