@@ -1,23 +1,27 @@
 """TasteVerse FastAPI application.
 
-Task 04 adds the fixed NPC catalog and a validated game-start route. No Qloo,
-DeepSeek, dialogue, scoring, or plan-evaluation calls are made here.
+Task 05 adds the DeepSeek/Qloo-backed NPC dialogue route. The route applies
+the deterministic Task 06 rules after the bounded agent loop; plan evaluation
+and scoring remain server-owned.
 """
 
 from __future__ import annotations
 
 import os
-from collections.abc import AsyncIterator, Sequence
+from collections.abc import AsyncIterator, Callable, Sequence
 from contextlib import asynccontextmanager
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 import httpx
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from app.api import game_router, npcs_router
+from app.api import dialogue_router, game_router, npcs_router
 from app.api.errors import install_error_handlers
+
+if TYPE_CHECKING:
+    from app.agents.service import DialogueService
 
 DEFAULT_CORS_ORIGINS = (
     "http://localhost:5173",
@@ -33,12 +37,15 @@ class HealthResponse(BaseModel):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    """Create and tear down the process-wide outbound HTTP client."""
+    """Create and tear down process-wide outbound clients."""
 
     app.state.http_client = httpx.AsyncClient(timeout=10.0)
     try:
         yield
     finally:
+        service = getattr(app.state, "dialogue_service", None)
+        if service is not None:
+            await service.aclose()
         await app.state.http_client.aclose()
 
 
@@ -68,8 +75,18 @@ def _cors_origins_from_env() -> list[str]:
     return _normalize_origins(raw.split(","))
 
 
-def create_app(cors_origins: Sequence[str] | None = None) -> FastAPI:
-    """Build the application, optionally overriding the CORS allow-list."""
+def create_app(
+    cors_origins: Sequence[str] | None = None,
+    *,
+    dialogue_service_factory: Callable[[], "DialogueService"] | None = None,
+) -> FastAPI:
+    """Build the application, optionally injecting dialogue dependencies.
+
+    ``dialogue_service_factory`` is intended for tests and explicitly supplied
+    deployments. The default lazily builds the real DeepSeek/Qloo service from
+    environment configuration on the first dialogue request, so unrelated
+    routes still start without credentials.
+    """
 
     origins = (
         _cors_origins_from_env()
@@ -82,6 +99,7 @@ def create_app(cors_origins: Sequence[str] | None = None) -> FastAPI:
         version="0.1.0",
         lifespan=lifespan,
     )
+    application.state.dialogue_service_factory = dialogue_service_factory
 
     application.add_middleware(
         CORSMiddleware,
@@ -94,6 +112,7 @@ def create_app(cors_origins: Sequence[str] | None = None) -> FastAPI:
     install_error_handlers(application)
     application.include_router(npcs_router)
     application.include_router(game_router)
+    application.include_router(dialogue_router)
 
     @application.get("/health", response_model=HealthResponse)
     def health() -> HealthResponse:
