@@ -3,18 +3,299 @@
 @tailwind utilities;
 
 :root {
-  color-scheme: dark;
+  color-scheme: light;
   font-family:
-    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI',
+    'Trebuchet MS', 'Segoe UI', ui-sans-serif, system-ui, -apple-system,
     sans-serif;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
 }
 
+html {
+  scroll-behavior: smooth;
+}
+
 body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
-  background-color: #020617;
+  background-color: #e9dabd;
+  color: #2b2620;
+}
+
+::selection {
+  background: #d49a2a;
+  color: #171310;
+}
+
+.festival-page {
+  background-color: #efe2c7;
+  background-image:
+    radial-gradient(rgba(43, 38, 32, 0.09) 1px, transparent 1px),
+    radial-gradient(rgba(255, 255, 255, 0.35) 1px, transparent 1px);
+  background-position:
+    0 0,
+    9px 9px;
+  background-size: 18px 18px;
+}
+
+.brand-block {
+  display: grid;
+  width: 2.9rem;
+  height: 2.9rem;
+  place-items: center;
+  border: 2px solid #2b2620;
+  background: #2b2620;
+  color: #fbf4e4;
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  box-shadow: 4px 4px 0 #bf3f2c;
+}
+
+.stamp {
+  display: inline-block;
+  transform: rotate(-1.5deg);
+  border: 2px solid #bf3f2c;
+  background: #fbf4e4;
+  color: #8d2a1d;
+  padding: 0.25rem 0.55rem;
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 0.6rem;
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.stage-badge {
+  display: inline-block;
+  border: 2px solid #2b2620;
+  background: #d49a2a;
+  color: #2b2620;
+  padding: 0.4rem 0.65rem;
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  box-shadow: 2px 2px 0 #2b2620;
+}
+
+.paper-panel {
+  position: relative;
+  border: 2px solid #2b2620;
+  border-radius: 2px;
+  background-color: #fbf4e4;
+  background-image: linear-gradient(
+    rgba(43, 38, 32, 0.035) 1px,
+    transparent 1px
+  );
+  background-size: 100% 24px;
+  box-shadow: 7px 7px 0 rgba(43, 38, 32, 0.22);
+  color: #2b2620;
+}
+
+.tape {
+  position: absolute;
+  display: block;
+  width: 5rem;
+  height: 1.35rem;
+  transform: rotate(-3deg);
+  border-left: 1px dashed rgba(43, 38, 32, 0.25);
+  border-right: 1px dashed rgba(43, 38, 32, 0.25);
+  background: rgba(212, 154, 42, 0.55);
+  pointer-events: none;
+}
+
+.journal-input {
+  border: 2px solid rgba(43, 38, 32, 0.45);
+  border-radius: 2px;
+  background: #fffaf0;
+  color: #2b2620;
+  padding: 0.55rem 0.7rem;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  outline: none;
+  transition:
+    border-color 120ms ease,
+    box-shadow 120ms ease;
+}
+
+.journal-input::placeholder {
+  color: rgba(43, 38, 32, 0.42);
+}
+
+.journal-input:focus {
+  border-color: #2b2620;
+  box-shadow: 3px 3px 0 #bf3f2c;
+}
+
+.journal-button {
+  display: inline-flex;
+  min-height: 2.75rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.7rem;
+  border: 2px solid #2b2620;
+  border-radius: 2px;
+  background: #2b2620;
+  color: #fbf4e4;
+  padding: 0.6rem 0.9rem;
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 0.7rem;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  box-shadow: 4px 4px 0 #bf3f2c;
+  transition:
+    transform 130ms ease,
+    background-color 130ms ease,
+    box-shadow 130ms ease;
+}
+
+.journal-button:hover:not(:disabled) {
+  transform: translate(-1px, -1px);
+  background: #bf3f2c;
+  box-shadow: 5px 5px 0 #2b2620;
+}
+
+.journal-button-secondary {
+  display: inline-flex;
+  min-height: 2.5rem;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid #2b2620;
+  border-radius: 2px;
+  background: #fbf4e4;
+  color: #2b2620;
+  padding: 0.45rem 0.8rem;
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 0.65rem;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  box-shadow: 3px 3px 0 #2b2620;
+  transition:
+    background-color 130ms ease,
+    transform 130ms ease;
+}
+
+.journal-button-secondary:hover {
+  transform: translateY(-1px);
+  background: #d49a2a;
+}
+
+.map-frame {
+  border: 4px solid #2b2620;
+  border-radius: 2px;
+  background: #14261b;
+  box-shadow: 8px 8px 0 rgba(43, 38, 32, 0.24);
+}
+
+.ending-sheet {
+  border-top-width: 8px;
+  animation: ending-settle 280ms ease-out both;
+}
+
+.ending-perfect {
+  border-top-color: #3f6b4f;
+}
+
+.ending-mixed {
+  border-top-color: #d49a2a;
+}
+
+.ending-chaos {
+  border-top-color: #bf3f2c;
+}
+
+.ending-stamp {
+  flex: 0 0 auto;
+  transform: rotate(5deg);
+  border: 2px solid currentColor;
+  padding: 0.25rem 0.45rem;
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.ending-perfect .ending-stamp {
+  color: #284735;
+}
+
+.ending-mixed .ending-stamp {
+  color: #855915;
+}
+
+.ending-chaos .ending-stamp {
+  color: #8d2a1d;
+}
+
+.skip-link {
+  position: absolute;
+  top: -100px;
+  left: 1rem;
+  z-index: 100;
+  border: 2px solid #2b2620;
+  background: #fbf4e4;
+  padding: 0.5rem 0.8rem;
+  color: #2b2620;
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  box-shadow: 3px 3px 0 #bf3f2c;
+}
+
+.skip-link:focus {
+  top: 1rem;
+}
+
+button,
+a,
+input,
+textarea,
+summary {
+  outline-color: #bf3f2c;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+summary:focus-visible {
+  outline: 2px solid #bf3f2c;
+  outline-offset: 2px;
+}
+
+@keyframes ending-settle {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

@@ -1,13 +1,16 @@
 # TasteVerse
 
-TasteVerse is a cultural adventure game scaffold. React owns the menus and UI,
-Phaser 3 owns the town scene, and FastAPI is the backend.
+TasteVerse is a playable cultural adventure game. React owns the field-journal
+UI, Phaser 3 owns the town scene, and FastAPI owns the signed game state,
+dialogue, Qloo evidence, and deterministic scoring.
 
-This repository now includes **Task 04**: typed FastAPI foundation routes for
-the fixed NPC catalog and new game sessions. React owns the menus and
-interaction panel, Phaser 3 owns movement, collision, and NPC proximity, and a
-typed event bridge connects the two. Qloo, DeepSeek, dialogue generation, plan
-evaluation, scoring, and deployment are **not** implemented yet.
+This repository includes the complete frontend loop from **Task 07B**: choose
+movie/music/food interests, start a signed game, explore the pixel market
+square, talk to all three residents through API-backed dialogue, unlock and
+submit a festival plan, and read the server-selected ending. Signed state is
+persisted in `localStorage`, so a reload resumes the same session. Qloo
+evidence is displayed separately from NPC prose; the browser never calculates a
+competing score.
 
 ## Stack
 
@@ -23,8 +26,9 @@ evaluation, scoring, and deployment are **not** implemented yet.
 - Node.js 20.19+ or 22.12+ and npm
 - Python 3.11+
 
-No `.env` file or API keys are needed for this task. Never commit secrets;
-root `.env.example` documents the variables that later tasks will require.
+No API key belongs in the frontend or its bundle. The frontend only needs the
+API origin. Backend provider keys stay in the backend environment; root
+`.env.example` documents those variables. Never commit `.env` files.
 
 ## Frontend
 
@@ -34,8 +38,36 @@ npm install
 npm run dev
 ```
 
-Open <http://localhost:5173>. The start screen is visible immediately, and the
-960×540 Phaser town scene is ready in the preview panel.
+Open <http://localhost:5173>. The start screen asks for at least one movie,
+music, or food interest, then calls `POST /api/game/start`. For local
+development Vite talks to `http://127.0.0.1:8000` by default. To point at a
+different API origin, create `frontend/.env.local`:
+
+```dotenv
+VITE_API_BASE_URL=http://127.0.0.1:8000
+```
+
+Use an absolute HTTPS origin for a deployed or separately hosted API. When
+`VITE_API_BASE_URL` is unset, a production build uses same-origin `/api`
+requests, so no localhost URL is baked into a deployment bundle. See
+`frontend/.env.example`.
+
+### Playable flow
+
+1. Enter interests (up to five per category, comma or newline separated) and
+   **Enter the town**. The returned `state` + `state_token` are saved together.
+2. Walk up to Mara, Jun, or Theo and press `E`/`Enter`. Send a message in the
+   dialogue panel. Real Qloo evidence appears in its own panel beneath the NPC
+   reply, with rapport and stage changes from the signed response.
+3. Meeting all three residents advances the stage to `plan` and unlocks the
+   movie/music/food plan form. Add at least one field or a free-text note.
+4. Submit the plan to `POST /api/plan/evaluate`. The UI shows backend evidence
+   status, component and NPC reasons, reactions, score, and the ending
+   (**Perfect Harmony**, **Mixed Night**, or **Cultural Chaos**).
+5. **Start over** clears the saved signed game after an inline confirmation.
+   A rejected/stale state offers the same restart path. Network, 401, 402, 429,
+   5xx, empty-evidence, and retryable failures are shown inline; closing a
+   dialogue panel always restores movement.
 
 ### Town controls
 
@@ -62,11 +94,19 @@ npm run build
 npm run preview
 ```
 
-- `npm test` runs the Vitest suite once, including interaction-bridge routing,
-  movement/collision helpers, NPC proximity, panel open/close, and cleanup.
+- `npm test` runs the Vitest suite once. It covers interests/start requests,
+  signed-state persistence and resume, all three NPC dialogue routes, progress
+  unlock, plan submission, all three backend endings, empty evidence, and
+  recoverable network/rate-limit/stale-state failures.
 - `npm run build` type-checks with TypeScript and writes the production bundle
   to `frontend/dist`.
-- `npm run preview` serves the built bundle locally.
+- `npm run preview` serves the built bundle locally. Set
+  `VITE_API_BASE_URL` before building when the preview should call a separate
+  API origin.
+
+For a local end-to-end run, start the backend first (see below), then run
+`npm run dev` and walk through the flow in the browser. The browser stores the
+signed game under `tasteverse.signed-game.v1` in `localStorage`.
 
 ## Backend
 
@@ -116,15 +156,25 @@ python -m pytest
 
 ```text
 frontend/
-  src/App.tsx                       Shell, controls copy, interaction panel state
+  src/App.tsx                       Game shell, signed session, quest orchestration
+  src/api/client.ts                 Typed fetch client and API error envelope
+  src/api/types.ts                  Wire shapes mirroring backend Pydantic models
+  src/api/errors.ts                 Recovery guidance for 401/402/409/429/5xx/network
+  src/components/StartScreen.tsx    Interest form and POST /api/game/start
+  src/components/QuestJournal.tsx   Resident progress, rapport, and interests
+  src/components/DialoguePanel.tsx  API dialogue, Qloo evidence, retry/close recovery
+  src/components/PlanPanel.tsx      Plan form, retryable evaluation errors
+  src/components/EndingReport.tsx   Server score/ending, evidence, reasons, reactions
+  src/game/storage.ts               Signed state + token localStorage persistence
+  src/game/interests.ts             Interest validation/parsing for the API
   src/game/PhaserStage.tsx          Phaser 3 game lifecycle and cleanup
   src/game/events.ts                Typed React–Phaser event bridge
   src/game/npcs.ts                  Three fixed NPC definitions
   src/game/world.ts                 Map bounds, obstacles, movement/collision
   src/game/scenes/TownScene.ts      Code-drawn town, player, NPC interactions
-  src/game/NpcInteractionPanel.tsx  React NPC interaction dialog
-  src/game/*.test.ts                Bridge, movement, and NPC tests
-  src/App.test.tsx                  Rendering, panel, and cleanup tests
+  src/game/*.test.ts                Bridge, movement, storage, and NPC tests
+  src/api/*.test.ts                 Error/recovery tests
+  src/App.test.tsx                  Start, resume, dialogue, plan, ending, error tests
 backend/
   app/main.py                     FastAPI app, lifespan, GET /health
   tests/test_health.py            Pytest health test
@@ -217,10 +267,11 @@ CORS is enabled only for the explicit origins in `CORS_ALLOWED_ORIGINS`
 
 ## Scope guard
 
-Task 03 is client-side only: it does not call Qloo or DeepSeek, does not generate
-dialogue, and does not add game rules or scoring. NPC interaction is exposed as a
-typed event so later API-backed dialogue can sit behind that boundary. Do not add
-real API keys to source files, environment examples, or the frontend bundle.
+The backend is authoritative for signed state transitions, Qloo evidence,
+score, and ending. The frontend displays those values and never computes a
+competing score or fabricates evidence. `state` and `state_token` must always be
+sent and stored together. Do not add real API keys to source files, environment
+examples, or the frontend bundle.
 
 ## License
 

@@ -56,12 +56,12 @@ function PhaserStage({ bridge }: PhaserStageProps) {
       />
       <span
         data-testid="scene-status"
-        className="pointer-events-none absolute bottom-3 left-3 z-10 inline-flex items-center gap-2 rounded-full border border-white/10 bg-slate-950/80 px-3 py-1 text-[10px] font-semibold tracking-wide text-slate-300 backdrop-blur"
+        className="pointer-events-none absolute bottom-3 left-3 z-10 inline-flex items-center gap-2 rounded-sm border border-paper/20 bg-ink/85 px-3 py-1 font-mono text-[9px] font-bold uppercase tracking-wider text-paper backdrop-blur"
       >
         <span
           aria-hidden="true"
           className={`h-1.5 w-1.5 rounded-full ${
-            ready ? 'bg-emerald-300' : 'bg-amber-300'
+            ready ? 'bg-moss' : 'bg-mustard'
           }`}
         />
         {ready ? 'Town scene ready' : 'Loading town scene…'}

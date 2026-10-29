@@ -1,16 +1,21 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
+import type { GameState, PlanEvaluateResponse } from './api/types';
+import DialoguePanel from './components/DialoguePanel';
+import PlanPanel from './components/PlanPanel';
+import QuestJournal from './components/QuestJournal';
+import StartScreen from './components/StartScreen';
 import { TownEventBridge } from './game/events';
+import type { NpcDialogueLog, DialogueLogs } from './game/dialogueLog';
 import { NPC_BY_ID } from './game/npcs';
-import NpcInteractionPanel from './game/NpcInteractionPanel';
 import PhaserStage from './game/PhaserStage';
+import {
+  clearSavedGame,
+  loadSavedGame,
+  saveGame,
+  type SavedGame,
+} from './game/storage';
 import type { NpcId, NpcInteraction } from './game/types';
-
-const townFacts = [
-  { label: 'One town map', detail: '960 × 540, drawn in code' },
-  { label: 'Three residents', detail: 'Mara, Jun, and Theo' },
-  { label: 'Typed bridge', detail: 'Phaser events → React panel' },
-];
 
 const controls = [
   { keys: 'W A S D  /  Arrow keys', action: 'Move around town' },
@@ -18,14 +23,113 @@ const controls = [
   { keys: 'Escape', action: 'Close the conversation panel' },
 ];
 
+const STAGE_BADGES = {
+  explore: 'Explore',
+  plan: 'Plan unlocked',
+  complete: 'Ending written',
+} as const;
+
 function App() {
-  const [started, setStarted] = useState(false);
+  const [initialSave] = useState<SavedGame | null>(() => loadSavedGame());
+  const [session, setSession] = useState<SavedGame | null>(initialSave);
+  const [notice, setNotice] = useState<string | null>(
+    initialSave ? 'Saved game resumed from this browser.' : null,
+  );
+  const [storageWarning, setStorageWarning] = useState(false);
   const [bridge] = useState(() => new TownEventBridge());
   const [activeNpc, setActiveNpc] = useState<NpcInteraction | null>(null);
   const [nearbyNpcId, setNearbyNpcId] = useState<NpcId | null>(null);
+  const [dialogueLogs, setDialogueLogs] = useState<DialogueLogs>({});
+  const [restartConfirmOpen, setRestartConfirmOpen] = useState(false);
+  const [mapMessage, setMapMessage] = useState<string | null>(null);
+  const sessionRef = useRef<SavedGame | null>(initialSave);
+
+  const commitSession = useCallback((next: SavedGame) => {
+    sessionRef.current = next;
+    setSession(next);
+    setStorageWarning(!saveGame(next));
+  }, []);
+
+  const handleStarted = useCallback(
+    (result: { state: GameState; state_token: string }) => {
+      setDialogueLogs({});
+      setActiveNpc(null);
+      setNearbyNpcId(null);
+      setNotice('New field journal opened. Meet all three residents.');
+      commitSession({
+        state: result.state,
+        stateToken: result.state_token,
+        savedAt: Date.now(),
+      });
+    },
+    [commitSession],
+  );
+
+  const handleDialogueState = useCallback(
+    (state: GameState, stateToken: string) => {
+      const current = sessionRef.current;
+
+      if (!current) {
+        return;
+      }
+
+      const next: SavedGame = {
+        ...current,
+        state,
+        stateToken,
+        evaluation:
+          state.stage === 'complete' ? current.evaluation : undefined,
+        savedAt: Date.now(),
+      };
+
+      commitSession(next);
+    },
+    [commitSession],
+  );
+
+  const handlePlanEvaluated = useCallback(
+    (result: PlanEvaluateResponse) => {
+      commitSession({
+        state: result.state,
+        stateToken: result.state_token,
+        evaluation: result,
+        savedAt: Date.now(),
+      });
+      setActiveNpc(null);
+      setNotice('The town has chosen an ending. Read it in your journal.');
+    },
+    [commitSession],
+  );
+
+  const restartGame = useCallback(() => {
+    clearSavedGame();
+    sessionRef.current = null;
+    setSession(null);
+    setActiveNpc(null);
+    setNearbyNpcId(null);
+    setDialogueLogs({});
+    setRestartConfirmOpen(false);
+    setNotice(null);
+    setMapMessage(null);
+    setStorageWarning(false);
+
+    if (activeNpc) {
+      bridge.emit('npc:panel-closed', { npcId: activeNpc.npcId });
+    }
+  }, [activeNpc, bridge]);
 
   useEffect(() => {
     const stopInteraction = bridge.on('npc:interact', (interaction) => {
+      const current = sessionRef.current;
+
+      if (!current || current.state.stage === 'complete') {
+        setMapMessage(
+          'The night is complete. Start a new game to talk with the residents again.',
+        );
+        return;
+      }
+
+      setMapMessage(null);
       setActiveNpc(interaction);
     });
     const stopProximity = bridge.on('npc:proximity', ({ npcId }) => {
@@ -66,145 +170,143 @@ function App() {
     };
   }, [activeNpc, closeInteraction]);
 
+  const handleLogChange = useCallback(
+    (npcId: NpcId, log: NpcDialogueLog) => {
+      setDialogueLogs((current) => ({ ...current, [npcId]: log }));
+    },
+    [],
+  );
+
+  if (!session) {
+    return <StartScreen onStarted={handleStarted} />;
+  }
+
+  const { state, stateToken, evaluation } = session;
   const nearbyNpc = nearbyNpcId ? NPC_BY_ID[nearbyNpcId] : null;
+  const complete = state.stage === 'complete';
+
+  const mapStatus = mapMessage
+    ? mapMessage
+    : complete
+      ? 'The ending is written. Start over to explore the square again.'
+      : nearbyNpc
+        ? `Near ${nearbyNpc.name} (${nearbyNpc.role}). Press E or Enter to talk.`
+        : 'Walk the square to find Mara, Jun, and Theo.';
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-slate-950 text-slate-100">
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute -left-32 top-[-10rem] h-[28rem] w-[28rem] rounded-full bg-amber-400/10 blur-3xl"
-      />
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute -right-40 bottom-[-12rem] h-[32rem] w-[32rem] rounded-full bg-cyan-400/10 blur-3xl"
-      />
+    <div className="festival-page min-h-screen text-ink">
+      <a href="#town-map" className="skip-link">
+        Skip to the town map
+      </a>
 
-      <div className="relative mx-auto flex min-h-screen w-full max-w-6xl flex-col px-6 py-8 sm:px-8">
-        <header className="flex flex-wrap items-center justify-between gap-4 border-b border-white/10 pb-5">
+      <div className="mx-auto flex min-h-screen w-full max-w-7xl flex-col px-3 py-3 sm:px-6 sm:py-5">
+        <header className="flex flex-wrap items-center justify-between gap-3 border-b-2 border-ink pb-3">
           <div className="flex items-center gap-3">
-            <span className="grid h-10 w-10 place-items-center rounded-xl bg-amber-400 font-black text-slate-950">
+            <span className="brand-block" aria-hidden="true">
               TV
             </span>
             <div>
-              <p className="text-sm font-semibold tracking-[0.22em] uppercase">
-                TasteVerse
+              <p className="font-mono text-[9px] font-bold uppercase tracking-[0.24em] text-tomato">
+                TasteVerse · field journal
               </p>
-              <p className="text-xs text-slate-400">Taste, culture, connection</p>
+              <p className="font-display text-xl font-bold leading-tight sm:text-2xl">
+                Market Square Festival
+              </p>
             </div>
           </div>
-          <span className="rounded-full border border-amber-300/30 bg-amber-300/10 px-3 py-1 text-xs font-medium text-amber-200">
-            Task 03 · Playable town
-          </span>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="stage-badge">{STAGE_BADGES[state.stage]}</span>
+            {restartConfirmOpen ? (
+              <div
+                role="group"
+                aria-label="Confirm restart"
+                className="flex flex-wrap items-center gap-1 border-2 border-ink bg-paper-light px-2 py-1.5"
+              >
+                <span className="font-mono text-[9px] font-bold uppercase tracking-wide">
+                  Clear saved progress?
+                </span>
+                <button
+                  type="button"
+                  onClick={restartGame}
+                  className="border border-tomato bg-tomato px-2 py-1 font-mono text-[9px] font-bold uppercase tracking-wide text-paper-light"
+                >
+                  Yes, start over
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRestartConfirmOpen(false)}
+                  className="border border-ink/30 px-2 py-1 font-mono text-[9px] font-bold uppercase tracking-wide"
+                >
+                  Keep playing
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setRestartConfirmOpen(true)}
+                className="border-2 border-ink bg-paper-light px-3 py-2 font-mono text-[10px] font-bold uppercase tracking-wider shadow-[2px_2px_0_#2b2620] transition hover:bg-mustard focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-tomato"
+              >
+                Start over
+              </button>
+            )}
+          </div>
         </header>
 
-        <main className="grid flex-1 items-center gap-10 py-12 lg:grid-cols-[1.05fr_0.95fr] lg:gap-14">
-          <section aria-labelledby="hero-heading">
-            <p className="mb-5 flex items-center gap-2 text-xs font-semibold tracking-[0.24em] text-amber-300 uppercase">
-              <span className="h-px w-8 bg-amber-300" aria-hidden="true" />
-              A small town, a big question
+        {notice || storageWarning ? (
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-l-4 border-moss bg-paper-light/70 px-3 py-2">
+            <p role="status" className="text-xs leading-5 text-ink/70">
+              {storageWarning
+                ? 'This browser blocked local saves. Progress will last only for this tab.'
+                : notice}
             </p>
-            <h1
-              id="hero-heading"
-              className="max-w-xl text-5xl font-semibold tracking-tight text-white sm:text-6xl"
-            >
-              TasteVerse
-              <span className="mt-3 block bg-gradient-to-r from-amber-200 via-orange-300 to-rose-300 bg-clip-text text-2xl font-normal text-transparent sm:text-3xl">
-                What if your taste could open doors?
-              </span>
-            </h1>
-            <p className="mt-6 max-w-xl text-base leading-7 text-slate-300 sm:text-lg">
-              Step into a cultural adventure where movies, music, and food become
-              conversation. Explore the market square, meet its three residents,
-              and discover what your taste says about you.
-            </p>
-
-            <div className="mt-8 flex flex-wrap items-center gap-4">
-              {started ? (
-                <button
-                  type="button"
-                  onClick={() => setStarted(false)}
-                  className="rounded-xl border border-white/15 bg-white/5 px-5 py-3 text-sm font-semibold text-white transition hover:border-amber-300/50 hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-300"
-                >
-                  Return to start
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => setStarted(true)}
-                  className="group inline-flex items-center gap-3 rounded-xl bg-amber-400 px-5 py-3 text-sm font-bold text-slate-950 shadow-lg shadow-amber-400/20 transition hover:bg-amber-300 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-200"
-                >
-                  Enter the town
-                  <span
-                    aria-hidden="true"
-                    className="transition-transform group-hover:translate-x-0.5"
-                  >
-                    →
-                  </span>
-                </button>
-              )}
-              <span className="text-xs text-slate-400">
-                No external services are called in this task.
-              </span>
-            </div>
-
-            {started ? (
-              <div
-                role="status"
-                className="mt-8 max-w-xl rounded-2xl border border-emerald-300/25 bg-emerald-300/5 p-4"
+            {notice ? (
+              <button
+                type="button"
+                onClick={() => setNotice(null)}
+                className="font-mono text-[9px] font-bold uppercase tracking-wider text-ink/50 underline underline-offset-2"
               >
-                <p className="flex items-center gap-2 text-sm font-semibold text-emerald-200">
-                  <span
-                    aria-hidden="true"
-                    className="h-2 w-2 rounded-full bg-emerald-300"
-                  />
-                  Town scene active
-                </p>
-                <p className="mt-2 text-sm leading-6 text-slate-300">
-                  Walk with WASD or the arrow keys. Approach Mara, Jun, or Theo,
-                  then press E or Enter to interact. Collisions, NPC proximity,
-                  and the React interaction panel are now live.
-                </p>
-              </div>
+                Dismiss
+              </button>
             ) : null}
+          </div>
+        ) : null}
 
-            <dl className="mt-10 grid max-w-xl gap-3 sm:grid-cols-3">
-              {townFacts.map((fact) => (
-                <div
-                  key={fact.label}
-                  className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-3"
-                >
-                  <dt className="text-xs font-semibold text-white">{fact.label}</dt>
-                  <dd className="mt-1 text-xs text-slate-400">{fact.detail}</dd>
-                </div>
-              ))}
-            </dl>
-          </section>
-
+        <main className="mt-4 grid flex-1 items-start gap-4 lg:grid-cols-[minmax(0,1.55fr)_minmax(310px,0.8fr)] lg:gap-6">
           <section
-            aria-label="Playable Phaser town"
-            className="rounded-3xl border border-white/10 bg-slate-900/70 p-3 shadow-2xl shadow-black/40 backdrop-blur"
+            id="town-map"
+            aria-labelledby="map-heading"
+            className="min-w-0"
           >
-            <div className="flex items-center justify-between gap-3 px-2 pb-3 pt-1">
-              <div className="flex items-center gap-2">
-                <span
-                  aria-hidden="true"
-                  className="h-2 w-2 rounded-full bg-emerald-300"
-                />
-                <span className="text-xs font-semibold tracking-wide text-slate-200">
-                  Market Square
-                </span>
+            <div className="mb-2 flex flex-wrap items-end justify-between gap-2">
+              <div>
+                <p className="font-mono text-[9px] font-bold uppercase tracking-[0.2em] text-tomato">
+                  The map · live
+                </p>
+                <h1
+                  id="map-heading"
+                  className="font-display text-2xl font-bold leading-tight sm:text-3xl"
+                >
+                  Market Square, after sundown
+                </h1>
               </div>
-              <span className="rounded-md border border-white/10 px-2 py-1 text-[10px] font-semibold tracking-widest text-slate-400 uppercase">
-                Phaser 3
-              </span>
+              <p className="font-mono text-[9px] font-bold uppercase tracking-wider text-ink/45">
+                960 × 540 · pixel town
+              </p>
             </div>
 
-            <div className="relative h-[300px] overflow-hidden rounded-2xl border border-white/10 bg-slate-950 sm:h-[380px]">
+            <div className="map-frame relative aspect-[16/9] max-h-[560px] w-full overflow-hidden">
               <PhaserStage bridge={bridge} />
               {activeNpc ? (
-                <NpcInteractionPanel
+                <DialoguePanel
                   interaction={activeNpc}
+                  gameState={state}
+                  stateToken={stateToken}
+                  log={dialogueLogs[activeNpc.npcId]}
+                  onLogChange={handleLogChange}
+                  onStateUpdate={handleDialogueState}
                   onClose={closeInteraction}
+                  onRestart={restartGame}
                 />
               ) : null}
             </div>
@@ -212,40 +314,66 @@ function App() {
             <div
               role="status"
               aria-live="polite"
-              className="min-h-9 px-2 pb-1 pt-3 text-xs text-slate-400"
+              className="mt-2 min-h-10 border-l-4 border-mustard bg-paper-light/60 px-3 py-2 text-xs leading-5 text-ink/70"
             >
-              {nearbyNpc
-                ? `Near ${nearbyNpc.name} (${nearbyNpc.role}). Press E or Enter to talk.`
-                : 'Explore the square to find Mara, Jun, and Theo.'}
+              {mapStatus}
             </div>
 
-            <div className="mt-1 rounded-xl border border-white/10 bg-white/[0.03] p-3">
-              <h2
-                id="controls-heading"
-                className="text-[10px] font-semibold tracking-[0.18em] text-amber-300 uppercase"
-              >
-                Town controls
-              </h2>
-              <ul
-                aria-labelledby="controls-heading"
-                className="mt-2 grid gap-1.5 text-xs text-slate-300"
-              >
-                {controls.map((control) => (
-                  <li key={control.keys} className="flex flex-wrap gap-x-2">
-                    <kbd className="rounded border border-white/15 bg-slate-950 px-1.5 py-0.5 font-mono text-[10px] text-slate-200">
-                      {control.keys}
-                    </kbd>
-                    <span>{control.action}</span>
-                  </li>
-                ))}
-              </ul>
+            <div className="mt-3 grid gap-2 sm:grid-cols-[1.15fr_0.85fr]">
+              <div className="border-2 border-ink/20 bg-paper-light/60 px-3 py-2.5">
+                <h2 className="font-mono text-[9px] font-bold uppercase tracking-[0.18em] text-tomato">
+                  Town controls
+                </h2>
+                <ul className="mt-1.5 space-y-1 text-[11px] text-ink/70">
+                  {controls.map((control) => (
+                    <li key={control.keys} className="flex flex-wrap gap-x-2">
+                      <kbd className="border border-ink/30 bg-paper px-1 py-0.5 font-mono text-[9px] font-bold text-ink">
+                        {control.keys}
+                      </kbd>
+                      <span>{control.action}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <div className="border-2 border-ink/20 bg-paper-light/60 px-3 py-2.5">
+                <h2 className="font-mono text-[9px] font-bold uppercase tracking-[0.18em] text-tomato">
+                  How the night works
+                </h2>
+                <p className="mt-1.5 text-[11px] leading-5 text-ink/70">
+                  Talk to all three residents to unlock the plan. Qloo evidence
+                  appears separately from NPC prose; the backend owns every
+                  score and ending.
+                </p>
+              </div>
             </div>
           </section>
+
+          <aside className="min-w-0 space-y-4" aria-label="Field journal">
+            <QuestJournal state={state} />
+
+            <PlanPanel
+              state={state}
+              stateToken={stateToken}
+              evaluation={evaluation}
+              onEvaluated={handlePlanEvaluated}
+              onRestart={restartGame}
+            />
+
+            <div className="border-t-2 border-ink/20 pt-2 text-[10px] leading-5 text-ink/50">
+              <p>
+                Signed state v{state.state_version} · session{' '}
+                <span className="break-all font-mono">
+                  {state.session_id.slice(0, 8)}
+                </span>
+                . Never edit the saved token by hand.
+              </p>
+            </div>
+          </aside>
         </main>
 
-        <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-white/10 pt-5 text-xs text-slate-500">
-          <p>TasteVerse · Task 03 playable town</p>
-          <p>Client-side only · no Qloo or DeepSeek calls</p>
+        <footer className="mt-5 flex flex-wrap items-center justify-between gap-2 border-t-2 border-ink/30 pt-3 font-mono text-[9px] uppercase tracking-[0.14em] text-ink/50">
+          <p>TasteVerse · one town, three residents, one night</p>
+          <p>Signed state · server-scored endings</p>
         </footer>
       </div>
     </div>
