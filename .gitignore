@@ -5,3 +5,5 @@ node_modules/
 __pycache__/
 dist/
 coverage/
+.pytest_cache/
+.npm-cache/
