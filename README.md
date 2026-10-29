@@ -3,9 +3,11 @@
 TasteVerse is a cultural adventure game scaffold. React owns the menus and UI,
 Phaser 3 owns the town scene, and FastAPI is the backend.
 
-This repository is at **Task 01**: a runnable, deliberately minimal scaffold.
-Qloo, DeepSeek, NPCs, game rules, scoring, and deployment are **not**
-implemented yet. The only application endpoint is `GET /health`.
+This repository now includes **Task 03**: a playable pixel-style town scene.
+React owns the menus and interaction panel, Phaser 3 owns movement, collision,
+and NPC proximity, and a typed event bridge connects the two. Qloo, DeepSeek,
+dialogue generation, game rules, scoring, and deployment are **not** implemented
+yet. The only application endpoint is `GET /health`.
 
 ## Stack
 
@@ -33,9 +35,25 @@ npm run dev
 ```
 
 Open <http://localhost:5173>. The start screen is visible immediately, and the
-Phaser `TownScene` placeholder initializes in the preview panel.
+960×540 Phaser town scene is ready in the preview panel.
 
-Run the smoke tests and production build:
+### Town controls
+
+| Input | Action |
+| --- | --- |
+| `W` `A` `S` `D` or arrow keys | Move the player |
+| `E` or `Enter` | Talk to a nearby resident |
+| `Escape` or **Close conversation** | Close the NPC panel and resume movement |
+
+The market square has three named residents with fixed locations and distinct
+pixel-art appearances: Mara the baker, Jun the record shop owner, and Theo the
+town storyteller. World edges, buildings, the fountain, the market stall, crates,
+trees, and the bench are solid. Walk close to a resident to see the proximity
+prompt, then press `E` or `Enter` to open the React interaction panel.
+
+### Tests and production build
+
+Run the tests and production build:
 
 ```powershell
 cd frontend
@@ -44,7 +62,8 @@ npm run build
 npm run preview
 ```
 
-- `npm test` runs the Vitest suite once.
+- `npm test` runs the Vitest suite once, including interaction-bridge routing,
+  movement/collision helpers, NPC proximity, panel open/close, and cleanup.
 - `npm run build` type-checks with TypeScript and writes the production bundle
   to `frontend/dist`.
 - `npm run preview` serves the built bundle locally.
@@ -97,10 +116,15 @@ python -m pytest
 
 ```text
 frontend/
-  src/App.tsx                     Start screen and scaffold status
-  src/game/PhaserStage.tsx        Phaser 3 game initialization
-  src/game/scenes/TownScene.ts    Placeholder scene (no game rules)
-  src/App.test.tsx                Vitest startup/rendering smoke tests
+  src/App.tsx                       Shell, controls copy, interaction panel state
+  src/game/PhaserStage.tsx          Phaser 3 game lifecycle and cleanup
+  src/game/events.ts                Typed React–Phaser event bridge
+  src/game/npcs.ts                  Three fixed NPC definitions
+  src/game/world.ts                 Map bounds, obstacles, movement/collision
+  src/game/scenes/TownScene.ts      Code-drawn town, player, NPC interactions
+  src/game/NpcInteractionPanel.tsx  React NPC interaction dialog
+  src/game/*.test.ts                Bridge, movement, and NPC tests
+  src/App.test.tsx                  Rendering, panel, and cleanup tests
 backend/
   app/main.py                     FastAPI app, lifespan, GET /health
   tests/test_health.py            Pytest health test
@@ -115,9 +139,10 @@ docs/                             Product and task documentation
 
 ## Scope guard
 
-Task 01 intentionally does not call Qloo or DeepSeek, does not contain game
-logic, and does not include deployment configuration. Do not add real API keys
-to source files, environment examples, or the frontend bundle.
+Task 03 is client-side only: it does not call Qloo or DeepSeek, does not generate
+dialogue, and does not add game rules or scoring. NPC interaction is exposed as a
+typed event so later API-backed dialogue can sit behind that boundary. Do not add
+real API keys to source files, environment examples, or the frontend bundle.
 
 ## License
 

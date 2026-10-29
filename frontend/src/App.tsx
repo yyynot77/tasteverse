@@ -1,15 +1,72 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
+import { TownEventBridge } from './game/events';
+import { NPC_BY_ID } from './game/npcs';
+import NpcInteractionPanel from './game/NpcInteractionPanel';
 import PhaserStage from './game/PhaserStage';
+import type { NpcId, NpcInteraction } from './game/types';
 
-const scaffoldFacts = [
-  { label: 'React + Vite', detail: 'Typed UI shell' },
-  { label: 'Phaser 3', detail: 'Scene placeholder' },
-  { label: 'FastAPI', detail: 'Health endpoint ready' },
+const townFacts = [
+  { label: 'One town map', detail: '960 × 540, drawn in code' },
+  { label: 'Three residents', detail: 'Mara, Jun, and Theo' },
+  { label: 'Typed bridge', detail: 'Phaser events → React panel' },
+];
+
+const controls = [
+  { keys: 'W A S D  /  Arrow keys', action: 'Move around town' },
+  { keys: 'E  /  Enter', action: 'Talk to a nearby resident' },
+  { keys: 'Escape', action: 'Close the conversation panel' },
 ];
 
 function App() {
   const [started, setStarted] = useState(false);
+  const [bridge] = useState(() => new TownEventBridge());
+  const [activeNpc, setActiveNpc] = useState<NpcInteraction | null>(null);
+  const [nearbyNpcId, setNearbyNpcId] = useState<NpcId | null>(null);
+
+  useEffect(() => {
+    const stopInteraction = bridge.on('npc:interact', (interaction) => {
+      setActiveNpc(interaction);
+    });
+    const stopProximity = bridge.on('npc:proximity', ({ npcId }) => {
+      setNearbyNpcId(npcId);
+    });
+
+    return () => {
+      stopInteraction();
+      stopProximity();
+    };
+  }, [bridge]);
+
+  const closeInteraction = useCallback(() => {
+    if (!activeNpc) {
+      return;
+    }
+
+    bridge.emit('npc:panel-closed', { npcId: activeNpc.npcId });
+    setActiveNpc(null);
+  }, [activeNpc, bridge]);
+
+  useEffect(() => {
+    if (!activeNpc) {
+      return;
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        closeInteraction();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [activeNpc, closeInteraction]);
+
+  const nearbyNpc = nearbyNpcId ? NPC_BY_ID[nearbyNpcId] : null;
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-slate-950 text-slate-100">
@@ -36,7 +93,7 @@ function App() {
             </div>
           </div>
           <span className="rounded-full border border-amber-300/30 bg-amber-300/10 px-3 py-1 text-xs font-medium text-amber-200">
-            Task 01 · Runnable scaffold
+            Task 03 · Playable town
           </span>
         </header>
 
@@ -57,8 +114,8 @@ function App() {
             </h1>
             <p className="mt-6 max-w-xl text-base leading-7 text-slate-300 sm:text-lg">
               Step into a cultural adventure where movies, music, and food become
-              conversation. Explore the town, meet its people, and discover what
-              your taste says about you.
+              conversation. Explore the market square, meet its three residents,
+              and discover what your taste says about you.
             </p>
 
             <div className="mt-8 flex flex-wrap items-center gap-4">
@@ -100,17 +157,18 @@ function App() {
                     aria-hidden="true"
                     className="h-2 w-2 rounded-full bg-emerald-300"
                   />
-                  Scaffold active
+                  Town scene active
                 </p>
                 <p className="mt-2 text-sm leading-6 text-slate-300">
-                  The Phaser placeholder scene is initialized and running. NPCs,
-                  quests, and API-backed clues arrive in later tasks.
+                  Walk with WASD or the arrow keys. Approach Mara, Jun, or Theo,
+                  then press E or Enter to interact. Collisions, NPC proximity,
+                  and the React interaction panel are now live.
                 </p>
               </div>
             ) : null}
 
             <dl className="mt-10 grid max-w-xl gap-3 sm:grid-cols-3">
-              {scaffoldFacts.map((fact) => (
+              {townFacts.map((fact) => (
                 <div
                   key={fact.label}
                   className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-3"
@@ -123,7 +181,7 @@ function App() {
           </section>
 
           <section
-            aria-label="Phaser scene preview"
+            aria-label="Playable Phaser town"
             className="rounded-3xl border border-white/10 bg-slate-900/70 p-3 shadow-2xl shadow-black/40 backdrop-blur"
           >
             <div className="flex items-center justify-between gap-3 px-2 pb-3 pt-1">
@@ -133,7 +191,7 @@ function App() {
                   className="h-2 w-2 rounded-full bg-emerald-300"
                 />
                 <span className="text-xs font-semibold tracking-wide text-slate-200">
-                  TownScene
+                  Market Square
                 </span>
               </div>
               <span className="rounded-md border border-white/10 px-2 py-1 text-[10px] font-semibold tracking-widest text-slate-400 uppercase">
@@ -141,24 +199,53 @@ function App() {
               </span>
             </div>
 
-            <div className="h-[300px] overflow-hidden rounded-2xl border border-white/10 bg-slate-950 sm:h-[380px]">
-              <PhaserStage />
+            <div className="relative h-[300px] overflow-hidden rounded-2xl border border-white/10 bg-slate-950 sm:h-[380px]">
+              <PhaserStage bridge={bridge} />
+              {activeNpc ? (
+                <NpcInteractionPanel
+                  interaction={activeNpc}
+                  onClose={closeInteraction}
+                />
+              ) : null}
             </div>
 
-            <div className="flex items-center justify-between gap-3 px-2 pb-1 pt-3">
-              <p className="text-xs text-slate-400">
-                Placeholder scene · no assets or game rules yet
-              </p>
-              <span className="text-[10px] font-semibold tracking-widest text-slate-500 uppercase">
-                960 × 540
-              </span>
+            <div
+              role="status"
+              aria-live="polite"
+              className="min-h-9 px-2 pb-1 pt-3 text-xs text-slate-400"
+            >
+              {nearbyNpc
+                ? `Near ${nearbyNpc.name} (${nearbyNpc.role}). Press E or Enter to talk.`
+                : 'Explore the square to find Mara, Jun, and Theo.'}
+            </div>
+
+            <div className="mt-1 rounded-xl border border-white/10 bg-white/[0.03] p-3">
+              <h2
+                id="controls-heading"
+                className="text-[10px] font-semibold tracking-[0.18em] text-amber-300 uppercase"
+              >
+                Town controls
+              </h2>
+              <ul
+                aria-labelledby="controls-heading"
+                className="mt-2 grid gap-1.5 text-xs text-slate-300"
+              >
+                {controls.map((control) => (
+                  <li key={control.keys} className="flex flex-wrap gap-x-2">
+                    <kbd className="rounded border border-white/15 bg-slate-950 px-1.5 py-0.5 font-mono text-[10px] text-slate-200">
+                      {control.keys}
+                    </kbd>
+                    <span>{control.action}</span>
+                  </li>
+                ))}
+              </ul>
             </div>
           </section>
         </main>
 
         <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-white/10 pt-5 text-xs text-slate-500">
-          <p>TasteVerse scaffold · Phase P0</p>
-          <p>Local-only health check: GET /health</p>
+          <p>TasteVerse · Task 03 playable town</p>
+          <p>Client-side only · no Qloo or DeepSeek calls</p>
         </footer>
       </div>
     </div>

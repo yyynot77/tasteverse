@@ -1,9 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
 import Phaser from 'phaser';
 
+import type { TownEventBridge } from './events';
 import { TownScene } from './scenes/TownScene';
 
-function PhaserStage() {
+interface PhaserStageProps {
+  bridge: TownEventBridge;
+}
+
+function PhaserStage({ bridge }: PhaserStageProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const [ready, setReady] = useState(false);
 
@@ -19,30 +24,34 @@ function PhaserStage() {
       parent: host,
       width: 960,
       height: 540,
-      backgroundColor: '#0f172a',
-      scene: [TownScene],
+      backgroundColor: '#254b34',
+      scene: [new TownScene(bridge)],
       scale: {
         mode: Phaser.Scale.FIT,
         autoCenter: Phaser.Scale.CENTER_BOTH,
       },
       render: {
-        antialias: true,
+        antialias: false,
+        pixelArt: true,
+        roundPixels: true,
       },
     });
 
     setReady(true);
 
     return () => {
+      // destroy(true) removes the canvas and detaches Phaser's global input and
+      // scene listeners, so Strict Mode's provisional mount cannot leak a game.
       game.destroy(true);
     };
-  }, []);
+  }, [bridge]);
 
   return (
     <div className="relative h-full w-full">
       <div
         ref={hostRef}
         data-testid="phaser-stage"
-        aria-label="TasteVerse town scene placeholder"
+        aria-label="TasteVerse town scene"
         className="h-full w-full"
       />
       <span
@@ -55,7 +64,7 @@ function PhaserStage() {
             ready ? 'bg-emerald-300' : 'bg-amber-300'
           }`}
         />
-        {ready ? 'Phaser scene initialized' : 'Initializing Phaser scene…'}
+        {ready ? 'Town scene ready' : 'Loading town scene…'}
       </span>
     </div>
   );
